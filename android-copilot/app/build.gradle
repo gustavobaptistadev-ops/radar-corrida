@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.motorista.radar'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.motorista.radar'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1'
+    }
+
+    buildTypes {
+        release {
+            // APK mínimo: remove código e recursos não usados
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            signingConfig signingConfigs.debug // só para teste no nosso celular
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+
+// Zero bibliotecas em runtime (sem AppCompat/Material): app leve e rápido.
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}

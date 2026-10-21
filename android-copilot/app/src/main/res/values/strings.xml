@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Radar Corrida</string>
+    <string name="acc_desc">Lê o valor, a distância e o tempo das corridas da Uber, 99 e inDrive e mostra no canto da tela se vale a pena (verde, amarelo ou vermelho). Nada sai do celular.</string>
+</resources>

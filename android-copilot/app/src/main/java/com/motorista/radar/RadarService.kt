@@ -17,28 +17,32 @@ import android.widget.TextView
 import java.util.Locale
 
 /**
- * Radar: lê o card da corrida e mostra um selo pequeno no canto.
+ * RadarService: Intercepta e avalia corridas em microssegundos.
  *
- * Por que é leve:
- *  - o sistema só envia eventos dos apps de motorista (filtro no XML);
- *  - throttle de 250 ms + descarte de cards repetidos;
- *  - lê só texto da árvore de acessibilidade (sem print, sem OCR, sem rede);
- *  - o selo é um único TextView reaproveitado, que não recebe toques.
+ * Eficiência energética extrema:
+ * - Só é acordado pelos pacotes da Uber, 99 e inDrive (definido em accessibility_service_config.xml).
+ * - Sem OCR, sem rede, sem alocação contínua de memória.
+ * - Single-pass node collection com limites rígidos de nós e profundidade.
+ * - Overlay flutuante com TYPE_ACCESSIBILITY_OVERLAY (não requer SYSTEM_ALERT_WINDOW).
+ * - Flags NOT_FOCUSABLE e NOT_TOUCHABLE: o selo é totalmente transparente ao toque,
+ *   garantindo que o motorista nunca erre o clique no botão "Aceitar" do app oficial.
  */
 class RadarService : AccessibilityService() {
 
     private lateinit var wm: WindowManager
     private var badge: TextView? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val hide = Runnable { badge?.visibility = View.GONE }
+    private val hideAction = Runnable { badge?.visibility = View.GONE }
     private val sb = StringBuilder(1024)
     private var nodeCount = 0
     private var lastRun = 0L
     private var lastRide: Ride? = null
     private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     override fun onServiceConnected() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        initTtsIfNeeded()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -48,18 +52,22 @@ class RadarService : AccessibilityService() {
 
         val pkg = event.packageName ?: return
         val root = findRoot(pkg) ?: return
+
         sb.setLength(0)
         nodeCount = 0
         collect(root, 0)
-        if (sb.indexOf("R$") < 0) return // não é card de corrida: sai já
+
+        // Se nem tem menção a moeda, não é tela de chamada de viagem
+        if (sb.indexOf("R$") < 0) return
 
         val ride = RideParser.parse(sb.toString()) ?: return
         if (ride == lastRide && badge?.visibility == View.VISIBLE) return
         lastRide = ride
-        show(ride, RideEvaluator.evaluate(ride, Prefs.load(this)))
+
+        val verdict = RideEvaluator.evaluate(ride, Prefs.load(this))
+        showBadge(ride, verdict)
     }
 
-    /** Janela do app que gerou o evento (pode ser o pop-up da Uber sobre outro app). */
     private fun findRoot(pkg: CharSequence): AccessibilityNodeInfo? {
         rootInActiveWindow?.let { if (it.packageName == pkg) return it }
         for (w in windows) {
@@ -79,61 +87,90 @@ class RadarService : AccessibilityService() {
         }
     }
 
-    private fun show(r: Ride, v: Verdict) {
+    private fun showBadge(r: Ride, v: Verdict) {
         val tv = badge ?: createBadge().also { badge = it }
-        val sb2 = StringBuilder()
-            .append(v.signal.emoji).append(" R$ ").append(v.perKm.br()).append("/km")
-        if (r.totalMin > 0) sb2.append("  •  R$ ").append(v.perHour.br(0)).append("/h")
-        sb2.append("\nLucro R$ ").append(v.profit.br())
+        val sbText = StringBuilder()
+            .append(v.signal.emoji)
+            .append(" R$ ").append(v.perKm.br()).append("/km")
+            .append(" (líq. ").append(v.netPerKm.br()).append(")")
+
+        if (r.totalMin > 0) {
+            sbText.append(" • R$ ").append(v.perHour.br(0)).append("/h")
+        }
+
+        sbText.append("\nLucro R$ ").append(v.profit.br())
             .append(" • ").append(r.totalKm.br(1)).append(" km")
-        if (r.totalMin > 0) sb2.append(" • ").append(r.totalMin).append(" min")
-        if (v.reason.isNotEmpty()) sb2.append("\n").append(v.reason)
-        tv.text = sb2
+        if (r.totalMin > 0) sbText.append(" • ").append(r.totalMin).append(" min")
+
+        if (r.hasDynamic) sbText.append(" ⚡ Dinâmica")
+        if (r.rating != null) sbText.append(" • ").append(r.rating.br(2)).append("★")
+
+        if (v.reason.isNotEmpty()) {
+            sbText.append("\n⚠️ ").append(v.reason)
+        }
+
+        tv.text = sbText
         (tv.background as GradientDrawable).setColor(v.signal.color)
         tv.visibility = View.VISIBLE
-        handler.removeCallbacks(hide)
-        handler.postDelayed(hide, SHOW_MS)
 
-        if (Prefs.speak(this)) speak(v)
+        handler.removeCallbacks(hideAction)
+        handler.postDelayed(hideAction, SHOW_DURATION_MS)
+
+        if (Prefs.speak(this)) {
+            announce(v, r)
+        }
     }
 
-    private fun speak(v: Verdict) {
-        val phrase = "${v.signal.word}. ${v.perKm.br()} por quilômetro. Lucro ${v.profit.br(0)} reais"
-        val t = tts
-        if (t == null) {
-            tts = TextToSpeech(this) { ok ->
-                if (ok == TextToSpeech.SUCCESS) {
+    private fun initTtsIfNeeded() {
+        if (tts == null && Prefs.speak(this)) {
+            tts = TextToSpeech(this) { status ->
+                if (status == TextToSpeech.SUCCESS) {
                     tts?.language = Locale("pt", "BR")
-                    tts?.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "r")
+                    ttsReady = true
                 }
             }
-        } else {
-            t.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "r")
         }
+    }
+
+    private fun announce(v: Verdict, r: Ride) {
+        initTtsIfNeeded()
+        if (!ttsReady && tts == null) return
+
+        val phrase = buildString {
+            append(v.signal.word).append(". ")
+            append(v.perKm.br()).append(" por quilômetro. ")
+            append("Lucro ").append(v.profit.br(0)).append(" reais. ")
+            if (r.hasDynamic) append("Tarifa dinâmica. ")
+            if (v.reason.isNotEmpty()) append(v.reason).append(".")
+        }
+
+        tts?.speak(phrase, TextToSpeech.QUEUE_FLUSH, null, "ride_verdict")
     }
 
     private fun createBadge(): TextView {
         val dp = resources.displayMetrics.density
         val tv = TextView(this).apply {
             setTextColor(0xFFFFFFFF.toInt())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
-            background = GradientDrawable().apply { cornerRadius = 12 * dp }
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+            setPadding((12 * dp).toInt(), (7 * dp).toInt(), (12 * dp).toInt(), (7 * dp).toInt())
+            background = GradientDrawable().apply { cornerRadius = 14 * dp }
             visibility = View.GONE
         }
+
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, // sem permissão extra
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or // nunca atrapalha o "Aceitar"
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
+            PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.END
             x = (8 * dp).toInt()
-            y = (90 * dp).toInt()
+            y = (80 * dp).toInt()
         }
+
         wm.addView(tv, lp)
         return tv
     }
@@ -141,16 +178,19 @@ class RadarService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
-        handler.removeCallbacks(hide)
+        handler.removeCallbacks(hideAction)
         badge?.let { wm.removeView(it) }
         badge = null
+        tts?.stop()
         tts?.shutdown()
+        tts = null
+        ttsReady = false
         super.onDestroy()
     }
 
     private companion object {
         const val THROTTLE_MS = 250L
-        const val SHOW_MS = 15_000L
+        const val SHOW_DURATION_MS = 14_000L
         const val MAX_DEPTH = 25
         const val MAX_NODES = 400
     }

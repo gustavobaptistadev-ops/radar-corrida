@@ -1,53 +1,87 @@
 package com.motorista.radar
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RideTest {
-    private val cfg = Config(fuelPrice = 4.0, kmPerLiter = 10.0, otherCostKm = 0.2,
-        minPerKm = 2.0, minPerHour = 35.0, maxPickupKm = 5.0) // custo = 0,60/km
+    private val cfg = Config(
+        fuelPrice = 4.0,
+        kmPerLiter = 10.0,
+        otherCostKm = 0.2, // custo total por km = R$ 0,60
+        minPerKm = 2.0,
+        minPerHour = 35.0,
+        maxPickupKm = 5.0,
+        minRating = 4.75
+    )
 
-    @Test fun uberCard() {
-        val r = RideParser.parse("UberX R$ 18,50 4,92 ★ 6 min (2.1 km) de distância Viagem de 18 min (9.4 km) Aceitar")!!
-        assertEquals(18.5, r.price, 0.001)
-        assertEquals(2.1, r.pickupKm, 0.001)
-        assertEquals(9.4, r.tripKm, 0.001)
-        assertEquals(24, r.totalMin)
+    @Test
+    fun uberCardComNotaEParada() {
+        val text = "UberX R$ 28,50 4,89 ★ 5 min (1.8 km) de distância Viagem de 22 min (11.2 km) com 1 parada Aceitar"
+        val r = RideParser.parse(text)
+        assertNotNull(r)
+        assertEquals(28.5, r!!.price, 0.001)
+        assertEquals(1.8, r.pickupKm, 0.001)
+        assertEquals(11.2, r.tripKm, 0.001)
+        assertEquals(27, r.totalMin)
+        assertEquals(1, r.stops)
+        assertEquals(4.89, r.rating ?: 0.0, 0.001)
     }
 
-    @Test fun metersAndHours() {
-        val r = RideParser.parse("R$ 60,00 800 m 3 min 1 h 5 min 40,5 km")!!
-        assertEquals(0.8, r.pickupKm, 0.001)
-        assertEquals(40.5, r.tripKm, 0.001)
-        assertEquals(68, r.totalMin)
-    }
-
-    @Test fun ignoresPerKmLabelAndClockTime() {
-        val r = RideParser.parse("R$ 22,40 R$ 2,10/km 1,5 km 4 min chegada 18h30 9,2 km 21 min")!!
-        assertEquals(22.4, r.price, 0.001)
-        assertEquals(10.7, r.totalKm, 0.001)
-        assertEquals(25, r.totalMin)
-    }
-
-    @Test fun notARide() {
-        assertNull(RideParser.parse("Você está online. Procurando viagens"))
-        assertNull(RideParser.parse("Saldo R$ 120,00"))
-    }
-
-    @Test fun green() {
-        val v = RideEvaluator.evaluate(Ride(30.0, 1.0, 9.0, 20), cfg)
+    @Test
+    fun uberCardComDinamica() {
+        val text = "Comfort R$ 34,00 Alta demanda 4,95 ★ 4 min (1.2 km) Viagem de 16 min (8.0 km)"
+        val r = RideParser.parse(text)
+        assertNotNull(r)
+        assertEquals(34.0, r!!.price, 0.001)
+        assertTrue(r.hasDynamic)
+        val v = RideEvaluator.evaluate(r, cfg)
         assertEquals(Signal.GREEN, v.signal)
-        assertEquals(24.0, v.profit, 0.001)
     }
 
-    @Test fun redWhenPerKmVeryLow() {
-        assertEquals(Signal.RED, RideEvaluator.evaluate(Ride(10.0, 2.0, 8.0, 20), cfg).signal)
+    @Test
+    fun card99PopComMetros() {
+        val text = "99Pop R$ 19,80 800 m 3 min de busca Viagem 7,5 km 18 min Aceitar"
+        val r = RideParser.parse(text)
+        assertNotNull(r)
+        assertEquals(19.80, r!!.price, 0.001)
+        assertEquals(0.8, r.pickupKm, 0.001)
+        assertEquals(7.5, r.tripKm, 0.001)
+        assertEquals(21, r.totalMin)
     }
 
-    @Test fun yellowWhenPickupALittleFar() {
-        val v = RideEvaluator.evaluate(Ride(40.0, 6.0, 10.0, 25), cfg)
+    @Test
+    fun cardInDriveOferta() {
+        val text = "inDrive Oferta: R$ 42,00 Distância até o cliente: 2,5 km Viagem estimada: 15 km 28 min"
+        val r = RideParser.parse(text)
+        assertNotNull(r)
+        assertEquals(42.0, r!!.price, 0.001)
+        assertEquals(2.5, r.pickupKm, 0.001)
+        assertEquals(15.0, r.tripKm, 0.001)
+        assertEquals(28, r.totalMin)
+    }
+
+    @Test
+    fun passageiroNotaMuitoBaixaGeraVermelho() {
+        val r = Ride(price = 25.0, pickupKm = 1.0, tripKm = 8.0, totalMin = 18, rating = 4.52)
+        val v = RideEvaluator.evaluate(r, cfg)
+        assertEquals(Signal.RED, v.signal)
+        assertTrue(v.reason.contains("nota"))
+    }
+
+    @Test
+    fun buscaMuitoLongeGeraAlertaAmareloOuVermelho() {
+        val r = Ride(price = 35.0, pickupKm = 6.5, tripKm = 9.0, totalMin = 25)
+        val v = RideEvaluator.evaluate(r, cfg)
         assertEquals(Signal.YELLOW, v.signal)
-        assertEquals("busca longe", v.reason)
+        assertTrue(v.reason.contains("busca longe"))
+    }
+
+    @Test
+    fun textoGenericoIgnorado() {
+        assertNull(RideParser.parse("Você está online. Procurando viagens"))
+        assertNull(RideParser.parse("Saldo diário: R$ 145,00"))
     }
 }

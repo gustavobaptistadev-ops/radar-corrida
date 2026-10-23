@@ -25,6 +25,8 @@ object Prefs {
             minPerKm = p.d("minKm", def.minPerKm),
             minPerHour = p.d("minH", def.minPerHour),
             maxPickupKm = p.d("maxPick", def.maxPickupKm),
+            minRating = p.d("minRat", def.minRating),
+            voiceOnlyAlerts = p.getBoolean("voiceOnlyAlerts", false)
         )
     }.also { cache = it }
 
@@ -36,6 +38,8 @@ object Prefs {
             .putString("minKm", c.minPerKm.toString())
             .putString("minH", c.minPerHour.toString())
             .putString("maxPick", c.maxPickupKm.toString())
+            .putString("minRat", c.minRating.toString())
+            .putBoolean("voiceOnlyAlerts", c.voiceOnlyAlerts)
             .apply()
         cache = c
     }

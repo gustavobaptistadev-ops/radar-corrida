@@ -27,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var minKm: EditText
     private lateinit var minH: EditText
     private lateinit var maxPick: EditText
+    private lateinit var minRat: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,11 +51,20 @@ class MainActivity : Activity() {
         minKm = field("Mínimo R$/km", c.minPerKm)
         minH = field("Mínimo de lucro R$/hora", c.minPerHour)
         maxPick = field("Busca máxima (km)", c.maxPickupKm)
+        minRat = field("Nota mínima do passageiro (ex: 4.75)", c.minRating)
+
         val speak = CheckBox(this).apply {
             text = "Falar o resumo em voz alta"
             isChecked = Prefs.speak(this@MainActivity)
         }
         root.addView(speak)
+
+        val voiceOnlyAlerts = CheckBox(this).apply {
+            text = "Falar APENAS alertas (corridas amarelas/vermelhas)"
+            isChecked = c.voiceOnlyAlerts
+        }
+        root.addView(voiceOnlyAlerts)
+
         button("Salvar") {
             Prefs.save(this, Config(
                 fuelPrice = fuel.num() ?: c.fuelPrice,
@@ -63,6 +73,8 @@ class MainActivity : Activity() {
                 minPerKm = minKm.num() ?: c.minPerKm,
                 minPerHour = minH.num() ?: c.minPerHour,
                 maxPickupKm = maxPick.num() ?: c.maxPickupKm,
+                minRating = minRat.num() ?: c.minRating,
+                voiceOnlyAlerts = voiceOnlyAlerts.isChecked
             ))
             Prefs.setSpeak(this, speak.isChecked)
             toast("Salvo. Custo atual: R$ ${Prefs.load(this).costPerKm.br()}/km")

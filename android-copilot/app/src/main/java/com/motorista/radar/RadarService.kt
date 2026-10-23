@@ -64,8 +64,9 @@ class RadarService : AccessibilityService() {
         if (ride == lastRide && badge?.visibility == View.VISIBLE) return
         lastRide = ride
 
-        val verdict = RideEvaluator.evaluate(ride, Prefs.load(this))
-        showBadge(ride, verdict)
+        val config = Prefs.load(this)
+        val verdict = RideEvaluator.evaluate(ride, config)
+        showBadge(ride, verdict, config)
     }
 
     private fun findRoot(pkg: CharSequence): AccessibilityNodeInfo? {
@@ -87,7 +88,7 @@ class RadarService : AccessibilityService() {
         }
     }
 
-    private fun showBadge(r: Ride, v: Verdict) {
+    private fun showBadge(r: Ride, v: Verdict, c: Config) {
         val tv = badge ?: createBadge().also { badge = it }
         val sbText = StringBuilder()
             .append(v.signal.emoji)
@@ -103,6 +104,7 @@ class RadarService : AccessibilityService() {
         if (r.totalMin > 0) sbText.append(" • ").append(r.totalMin).append(" min")
 
         if (r.hasDynamic) sbText.append(" ⚡ Dinâmica")
+        if (r.tollIncluded) sbText.append(" 🛣️ Pedágio")
         if (r.rating != null) sbText.append(" • ").append(r.rating.br(2)).append("★")
 
         if (v.reason.isNotEmpty()) {
@@ -117,7 +119,10 @@ class RadarService : AccessibilityService() {
         handler.postDelayed(hideAction, SHOW_DURATION_MS)
 
         if (Prefs.speak(this)) {
-            announce(v, r)
+            val shouldSpeak = !c.voiceOnlyAlerts || v.signal != Signal.GREEN
+            if (shouldSpeak) {
+                announce(v, r)
+            }
         }
     }
 
@@ -141,6 +146,7 @@ class RadarService : AccessibilityService() {
             append(v.perKm.br()).append(" por quilômetro. ")
             append("Lucro ").append(v.profit.br(0)).append(" reais. ")
             if (r.hasDynamic) append("Tarifa dinâmica. ")
+            if (r.tollIncluded) append("Pedágio incluso. ")
             if (v.reason.isNotEmpty()) append(v.reason).append(".")
         }
 

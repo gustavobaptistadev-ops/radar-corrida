@@ -31,12 +31,13 @@ class RideTest {
     }
 
     @Test
-    fun uberCardComDinamica() {
-        val text = "Comfort R$ 34,00 Alta demanda 4,95 ★ 4 min (1.2 km) Viagem de 16 min (8.0 km)"
+    fun uberCardComDinamicaEPedagio() {
+        val text = "Comfort R$ 42,00 Alta demanda Pedágio incluído 4,95 ★ 4 min (1.2 km) Viagem de 16 min (8.0 km)"
         val r = RideParser.parse(text)
         assertNotNull(r)
-        assertEquals(34.0, r!!.price, 0.001)
+        assertEquals(42.0, r!!.price, 0.001)
         assertTrue(r.hasDynamic)
+        assertTrue(r.tollIncluded)
         val v = RideEvaluator.evaluate(r, cfg)
         assertEquals(Signal.GREEN, v.signal)
     }
@@ -61,6 +62,17 @@ class RideTest {
         assertEquals(2.5, r.pickupKm, 0.001)
         assertEquals(15.0, r.tripKm, 0.001)
         assertEquals(28, r.totalMin)
+    }
+
+    @Test
+    fun card99NegociaComNotaEComissao() {
+        val text = "99Negocia R$ 31,50 4.82 ★ Busca 2.1 km 6 min Viagem 9.8 km 22 min"
+        val r = RideParser.parse(text)
+        assertNotNull(r)
+        assertEquals(31.50, r!!.price, 0.001)
+        assertEquals(2.1, r.pickupKm, 0.001)
+        assertEquals(9.8, r.tripKm, 0.001)
+        assertEquals(4.82, r.rating ?: 0.0, 0.001)
     }
 
     @Test

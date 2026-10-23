@@ -11,6 +11,7 @@ import java.util.Locale
  * @param stops Quantidade de paradas intermediárias detectadas
  * @param rating Nota do passageiro (ex: 4.85), se detectada
  * @param hasDynamic Indica se há tarifa dinâmica/multiplicador no card
+ * @param tollIncluded Indica se o pedágio já está incluso no valor
  */
 data class Ride(
     val price: Double,
@@ -19,7 +20,8 @@ data class Ride(
     val totalMin: Int,
     val stops: Int = 0,
     val rating: Double? = null,
-    val hasDynamic: Boolean = false
+    val hasDynamic: Boolean = false,
+    val tollIncluded: Boolean = false
 ) {
     val totalKm: Double get() = pickupKm + tripKm
 }
@@ -32,7 +34,8 @@ data class Config(
     val minPerKm: Double = 2.00,    // meta mínima R$/km (bruto)
     val minPerHour: Double = 35.0,  // meta mínima de lucro R$/hora
     val maxPickupKm: Double = 5.0,  // busca máxima aceitável em km
-    val minRating: Double = 4.75    // nota mínima aceitável do passageiro
+    val minRating: Double = 4.75,   // nota mínima aceitável do passageiro
+    val voiceOnlyAlerts: Boolean = false // se true, fala em voz alta apenas corridas amarelas ou vermelhas
 ) {
     val costPerKm: Double get() = fuelPrice / kmPerLiter.coerceAtLeast(1.0) + otherCostKm
 }
@@ -65,6 +68,7 @@ object RideParser {
     private val RATING = Regex("""([345][.,]\d{1,2})\s*★|★\s*([345][.,]\d{1,2})""")
     private val STOPS = Regex("""(\d+)\s*(?:paradas?|stops?)|\bcom\s*parada\b""", RegexOption.IGNORE_CASE)
     private val DYNAMIC = Regex("""\b(?:dinâmica|dinamica|preço\s*mais\s*alto|alta\s*demanda|\+\s*R\$\s*\d+)\b""", RegexOption.IGNORE_CASE)
+    private val TOLL = Regex("""\b(?:pedágio|pedagio|com\s*pedágio|pedágio\s*inclu[íi]do)\b""", RegexOption.IGNORE_CASE)
 
     fun parse(text: String): Ride? {
         // Encontra o valor principal da corrida em R$
@@ -101,8 +105,9 @@ object RideParser {
             num(rStr)
         }
 
-        // Indicador de tarifa dinâmica
+        // Indicador de tarifa dinâmica e pedágio
         val hasDynamic = DYNAMIC.containsMatchIn(text)
+        val hasToll = TOLL.containsMatchIn(text)
 
         val pickup = if (dists.size > 1) dists[0] else 0.0
         val trip = if (dists.size > 1) dists.drop(1).sum() else dists[0]
@@ -114,7 +119,8 @@ object RideParser {
             totalMin = minutes,
             stops = stopsCount,
             rating = rating,
-            hasDynamic = hasDynamic
+            hasDynamic = hasDynamic,
+            tollIncluded = hasToll
         )
     }
 

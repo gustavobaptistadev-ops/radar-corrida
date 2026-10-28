@@ -89,7 +89,7 @@ class MainActivity : Activity() {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, names)
             setSelection(Prefs.carIndex(this@MainActivity))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: AdapterView<*>?, position: Int, id: Long) {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     Prefs.setCarIndex(this@MainActivity, position)
                     if (position > 0) {
                         val car = CarPresets.LIST[position]
@@ -133,9 +133,9 @@ class MainActivity : Activity() {
         }
         carCard.addView(rgFuel)
 
-        fuelPriceField = createField("Preço do Combustível (R$/L)", c.fuelPrice.toString(), dp)
-        kmlField = createField("Consumo Médio do Carro (km/L)", c.kmPerLiter.toString(), dp)
-        otherCostField = createField("Manutenção/Depreciação por km (R$)", c.otherCostKm.toString(), dp)
+        fuelPriceField = createField(carCard, "Preço do Combustível (R$/L)", c.fuelPrice.toString(), dp)
+        kmlField = createField(carCard, "Consumo Médio do Carro (km/L)", c.kmPerLiter.toString(), dp)
+        otherCostField = createField(carCard, "Manutenção/Depreciação por km (R$)", c.otherCostKm.toString(), dp)
 
         costPerKmBadge = TextView(this).apply {
             setTextColor(0xFF4CAF50.toInt())
@@ -151,10 +151,10 @@ class MainActivity : Activity() {
         // Seção: Metas de Rentabilidade
         val targetCard = createCard(dp)
         targetCard.addView(createSectionTitle("🎯 Suas Metas de Lucro", dp))
-        minKmField = createField("Mínimo R$/km Bruto", c.minPerKm.toString(), dp)
-        minHField = createField("Mínimo Lucro R$/hora", c.minPerHour.toString(), dp)
-        maxPickField = createField("Busca Máxima do Passageiro (km)", c.maxPickupKm.toString(), dp)
-        minRatField = createField("Nota Mínima do Passageiro (ex: 4.75)", c.minRating.toString(), dp)
+        minKmField = createField(targetCard, "Mínimo R$/km Bruto", c.minPerKm.toString(), dp)
+        minHField = createField(targetCard, "Mínimo Lucro R$/hora", c.minPerHour.toString(), dp)
+        maxPickField = createField(targetCard, "Busca Máxima do Passageiro (km)", c.maxPickupKm.toString(), dp)
+        minRatField = createField(targetCard, "Nota Mínima do Passageiro (ex: 4.75)", c.minRating.toString(), dp)
 
         val chkSpeak = CheckBox(this).apply {
             text = "Falar resumo em voz alta no som/fone"
@@ -194,9 +194,9 @@ class MainActivity : Activity() {
         // Seção: Registro Rápido de Abastecimento
         val refuelCard = createCard(dp)
         refuelCard.addView(createSectionTitle("⛽ Registrar Abastecimento", dp))
-        val paidField = createField("Valor Total Pago (R$)", "", dp)
-        val priceLField = createField("Preço por Litro no Posto (R$)", "", dp)
-        val odoField = createField("Hodômetro Atual do Carro (km)", "", dp)
+        val paidField = createField(refuelCard, "Valor Total Pago (R$)", "", dp)
+        val priceLField = createField(refuelCard, "Preço por Litro no Posto (R$)", "", dp)
+        val odoField = createField(refuelCard, "Hodômetro Atual do Carro (km)", "", dp)
         val refuelResult = TextView(this).apply {
             setTextColor(0xFF81C784.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -288,7 +288,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun createField(label: String, defVal: String, dp: Float): EditText {
+    private fun createField(parent: LinearLayout, label: String, defVal: String, dp: Float): EditText {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, (4 * dp).toInt(), 0, (4 * dp).toInt())
@@ -313,7 +313,7 @@ class MainActivity : Activity() {
         }
         container.addView(tv)
         container.addView(et)
-        (layoutParams as? LinearLayout)?.addView(container) ?: root.addView(container)
+        parent.addView(container)
         return et
     }
 

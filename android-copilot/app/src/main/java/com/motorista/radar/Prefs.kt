@@ -47,6 +47,12 @@ object Prefs {
     fun speak(ctx: Context) = sp(ctx).getBoolean("speak", false)
     fun setSpeak(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("speak", v).apply()
 
+    fun carIndex(ctx: Context) = sp(ctx).getInt("carIndex", 0)
+    fun setCarIndex(ctx: Context, idx: Int) = sp(ctx).edit().putInt("carIndex", idx).apply()
+
+    fun fuelTypeIndex(ctx: Context) = sp(ctx).getInt("fuelTypeIndex", 0) // 0: Etanol, 1: Gasolina, 2: GNV
+    fun setFuelTypeIndex(ctx: Context, idx: Int) = sp(ctx).edit().putInt("fuelTypeIndex", idx).apply()
+
     /**
      * Registra abastecimento: calcula litros e, com o hodômetro anterior,
      * estima o consumo real (km/L) — inclui rodagem pessoal, que também gasta combustível.

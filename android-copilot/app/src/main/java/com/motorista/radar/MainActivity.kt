@@ -223,6 +223,28 @@ class MainActivity : Activity() {
         refuelCard.addView(refuelResult)
         root.addView(refuelCard)
 
+        // Seção: Atualizações do Aplicativo
+        val updateCard = createCard(dp)
+        updateCard.addView(createSectionTitle("🔄 Atualizações do App", dp))
+        val currentVer = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "v0.5.0"
+        } catch (_: Exception) {
+            "v0.5.0"
+        }
+        val updateInfo = TextView(this).apply {
+            text = "Versão instalada: $currentVer\nToque no botão para verificar e atualizar direto pelo app sem precisar baixar manualmente."
+            setTextColor(0xFFB0BEC5.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        }
+        val btnCheckUpdate = createSecondaryButton("VERIFICAR & ATUALIZAR AGORA", dp) {
+            Toast.makeText(this, "Verificando se há novas versões...", Toast.LENGTH_SHORT).show()
+            AppUpdater.checkForUpdate(this)
+        }
+        updateCard.addView(updateInfo)
+        updateCard.addView(btnCheckUpdate)
+        root.addView(updateCard)
+
         setContentView(ScrollView(this).apply {
             setBackgroundColor(0xFF121212.toInt())
             addView(root)
